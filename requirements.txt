@@ -1,5 +1,5 @@
 streamlit
-rdkit-pypi
+rdkit-pypi==2022.9.5
 py3Dmol
 xgboost
 scikit-learn
