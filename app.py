@@ -2,11 +2,30 @@ import streamlit as st
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, DataStructs
-import xgboost as xgb
 import joblib
+import torch
 import py3Dmol
 
-# Load model and scaler
+# Device for PyTorch model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Define the StackedModel class exactly as it was during training
+class StackedModel:
+    def __init__(self, model_lgb, model_nn, stack_model, input_dim):
+        self.model_lgb = model_lgb
+        self.model_nn = model_nn
+        self.stack_model = stack_model
+        self.input_dim = input_dim
+
+    def predict(self, X_np):
+        lgb_pred = self.model_lgb.predict(X_np)
+        self.model_nn.eval()
+        with torch.no_grad():
+            nn_pred = self.model_nn(torch.tensor(X_np, dtype=torch.float32).to(device)).cpu().numpy().reshape(-1)
+        stacked_input = np.vstack([lgb_pred, nn_pred]).T
+        return self.stack_model.predict(stacked_input)
+
+# Load the stacked model and scaler
 model = joblib.load('stacked_polymer_model.pkl')
 scaler = joblib.load('polymer_feature_scaler.pkl')
 
@@ -51,16 +70,16 @@ def main():
     
     # App Introduction
     st.markdown("""
-    Welcome to the **Polymer Tg Prediction App
+    Welcome to the **Polymer Tg Prediction App**  
     This tool helps you **predict the glass transition temperature (Tg)** of a polymer using its **SMILES structure** and selected molecular properties.  
     You’ll also get a **3D visualization** of your polymer structure.
 
-    ###  What is Tg (Glass Transition Temperature)?
+    ### What is Tg (Glass Transition Temperature)?
 
     The **glass transition temperature (Tg)** is the temperature at which a polymer changes from a **hard and brittle "glassy" state** to a **soft and flexible "rubbery" state**.  
     It's a critical property for determining a polymer's **mechanical behavior**, **flexibility**, and **temperature resistance** in real-world applications.
 
-    ###  How to Use:
+    ### How to Use:
     1. Enter a valid **SMILES string** of the polymer.
     2. Input optional molecular features like:
         - FFV (Free Volume Fraction)
@@ -72,6 +91,7 @@ def main():
         - Estimated **Tg value**
         - **Interactive 3D model** of your molecule
     """)
+    
     # User input for SMILES
     smiles = st.text_input("Enter Polymer SMILES:")
 
@@ -106,17 +126,22 @@ def main():
             extra_features = [ffv, tc, density, rg, mw]
             full_features = np.concatenate([features, extra_features])
 
-            # Scale and predict
+            # Scale features
             try:
                 features_scaled = scaler.transform([full_features])
-                dmatrix = xgb.DMatrix(features_scaled)
-                pred = model.predict(dmatrix)
+            except Exception as e:
+                st.error(f"Feature scaling failed: {e}")
+                return
+
+            # Predict using stacked model
+            try:
+                pred = model.predict(features_scaled)
                 st.success(f"Predicted Tg: {pred[0]:.2f} K")
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
                 return
 
-            # 3D Structure
+            # 3D Structure visualization
             st.subheader("3D Polymer Structure")
             viewer = draw_3d_molecule(smiles)
             if viewer:
