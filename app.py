@@ -5,9 +5,26 @@ from rdkit.Chem import AllChem, MACCSkeys, DataStructs, Descriptors
 import joblib
 import torch
 import py3Dmol
+import torch.nn as nn
+
+
 
 # Device for PyTorch model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#class NN for combining model
+
+class SimpleNN(nn.Module):
+    def __init__(self, input_dim):
+        super(SimpleNN, self).__init__()
+        self.layer1 = nn.Linear(input_dim, 128)
+        self.relu = nn.ReLU()
+        self.layer2 = nn.Linear(128, 1)
+
+    def forward(self, x):
+        x = self.relu(self.layer1(x))
+        x = self.layer2(x)
+        return x
 
 # Define the stacked model class (must match saved model)
 class StackedModel:
