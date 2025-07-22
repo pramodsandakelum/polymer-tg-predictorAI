@@ -7,3 +7,4 @@ joblib
 py3Dmol
 xgboost
 numpy
+lightgbm
