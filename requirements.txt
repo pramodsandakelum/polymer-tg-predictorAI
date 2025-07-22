@@ -6,5 +6,5 @@ rdkit-pypi
 joblib
 py3Dmol
 xgboost
-numpy
+numpy==1.23.5
 lightgbm
