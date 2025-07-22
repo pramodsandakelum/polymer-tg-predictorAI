@@ -7,8 +7,8 @@ import joblib
 import py3Dmol
 
 # Load model and scaler
-model = joblib.load('polymer_xgb_model_optimized.pkl')
-scaler = joblib.load('polymer_scaler.pkl')
+model = joblib.load('stacked_polymer_model.pkl')
+scaler = joblib.load('polymer_feature_scaler.pkl')
 
 # Combined fingerprint function
 def featurize_fp(smiles, radius=2, nBits=2048):
