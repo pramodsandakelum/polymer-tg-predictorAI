@@ -4,12 +4,29 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, DataStructs
 import joblib
 import torch
+import torch.nn as nn
 import py3Dmol
 
-# Device for PyTorch model
+# Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Define the StackedModel class exactly as it was during training
+# Define the same SimpleNN used during training
+class SimpleNN(nn.Module):
+    def __init__(self, input_dim):
+        super(SimpleNN, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+# Define the StackedModel class used during training
 class StackedModel:
     def __init__(self, model_lgb, model_nn, stack_model, input_dim):
         self.model_lgb = model_lgb
@@ -26,15 +43,14 @@ class StackedModel:
         return self.stack_model.predict(stacked_input)
 
 # Load the stacked model and scaler
-model = joblib.load('stacked_polymer_model.pkl')
+model = joblib.load('stacked_polymer_model.pkl')   # includes model_lgb, model_nn, and stack_model
 scaler = joblib.load('polymer_feature_scaler.pkl')
 
-# Combined fingerprint function
+# Molecular fingerprint + MACCS
 def featurize_fp(smiles, radius=2, nBits=2048):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
-
     morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits)
     morgan_arr = np.zeros((nBits,), dtype=int)
     DataStructs.ConvertToNumpyArray(morgan_fp, morgan_arr)
@@ -45,7 +61,7 @@ def featurize_fp(smiles, radius=2, nBits=2048):
 
     return np.concatenate([morgan_arr, maccs_arr])
 
-# 3D viewer function
+# Molecule viewer
 def draw_3d_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     mol = Chem.AddHs(mol)
@@ -64,39 +80,23 @@ def draw_3d_molecule(smiles):
     viewer.zoomTo()
     return viewer
 
-# Main Streamlit app
+# Main Streamlit UI
 def main():
     st.title("Polymer Tg Prediction + 3D Viewer")
-    
-    # App Introduction
+
     st.markdown("""
-    Welcome to the **Polymer Tg Prediction App**  
-    This tool helps you **predict the glass transition temperature (Tg)** of a polymer using its **SMILES structure** and selected molecular properties.  
-    You’ll also get a **3D visualization** of your polymer structure.
+    This app predicts the **glass transition temperature (Tg)** of a polymer based on its **SMILES** and optional molecular properties.
 
-    ### What is Tg (Glass Transition Temperature)?
+    Enter:
+    - SMILES string (required)
+    - FFV, Tc, Density, Rg, and Molecular Weight (optional)
 
-    The **glass transition temperature (Tg)** is the temperature at which a polymer changes from a **hard and brittle "glassy" state** to a **soft and flexible "rubbery" state**.  
-    It's a critical property for determining a polymer's **mechanical behavior**, **flexibility**, and **temperature resistance** in real-world applications.
-
-    ### How to Use:
-    1. Enter a valid **SMILES string** of the polymer.
-    2. Input optional molecular features like:
-        - FFV (Free Volume Fraction)
-        - Tc (Critical Temperature)
-        - Density (g/cm³)
-        - Rg (Radius of Gyration)
-        - Molecular Weight
-    3. Click **Predict Tg and Show 3D** to get:
-        - Estimated **Tg value**
-        - **Interactive 3D model** of your molecule
+    Then click **Predict Tg and Show 3D**.
     """)
-    
-    # User input for SMILES
-    smiles = st.text_input("Enter Polymer SMILES:")
 
-    # Extra features
-    st.subheader("Enter Additional Molecular Properties:")
+    # Input fields
+    smiles = st.text_input("Enter Polymer SMILES:")
+    st.subheader("Optional Molecular Properties")
     ffv = st.number_input("FFV (Free Volume Fraction)", min_value=0.0, step=0.01, format="%.4f")
     tc = st.number_input("Tc (Critical Temperature in K)", min_value=0.0, step=1.0)
     density = st.number_input("Density (g/cm³)", min_value=0.0, step=0.01, format="%.4f")
@@ -105,43 +105,40 @@ def main():
 
     if st.button("Predict Tg and Show 3D"):
         if not smiles:
-            st.error("Please enter a SMILES string.")
+            st.error("Please enter a valid SMILES string.")
             return
 
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
-            st.error("Invalid SMILES string.")
+            st.error("Invalid SMILES structure.")
             return
 
         st.write(f"Input SMILES: `{smiles}`")
 
-        with st.spinner("Predicting Tg and generating 3D structure..."):
-            # Generate features
+        with st.spinner("Processing and predicting..."):
             features = featurize_fp(smiles)
             if features is None:
-                st.error("Failed to generate molecular fingerprints.")
+                st.error("Fingerprint generation failed.")
                 return
 
-            # Append additional features
+            # Combine with additional features
             extra_features = [ffv, tc, density, rg, mw]
             full_features = np.concatenate([features, extra_features])
 
-            # Scale features
             try:
                 features_scaled = scaler.transform([full_features])
             except Exception as e:
                 st.error(f"Feature scaling failed: {e}")
                 return
 
-            # Predict using stacked model
             try:
                 pred = model.predict(features_scaled)
-                st.success(f"Predicted Tg: {pred[0]:.2f} K")
+                st.success(f"Predicted Tg: **{pred[0]:.2f} K**")
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
                 return
 
-            # 3D Structure visualization
+            # 3D visualization
             st.subheader("3D Polymer Structure")
             viewer = draw_3d_molecule(smiles)
             if viewer:
