@@ -1,32 +1,15 @@
 import streamlit as st
 import numpy as np
 from rdkit import Chem
-from rdkit.Chem import AllChem, MACCSkeys, DataStructs
+from rdkit.Chem import AllChem, MACCSkeys, DataStructs, Descriptors
 import joblib
 import torch
-import torch.nn as nn
 import py3Dmol
 
-# Device for PyTorch
+# Device for PyTorch model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Define the SimpleNN class exactly as in your training code
-class SimpleNN(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, 512),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, 128),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 1)
-        )
-    def forward(self, x):
-        return self.net(x)
-
-# Define your StackedModel class as well, if you use it to load
+# Define the stacked model class (must match saved model)
 class StackedModel:
     def __init__(self, model_lgb, model_nn, stack_model, scaler, input_dim):
         self.model_lgb = model_lgb
@@ -44,32 +27,77 @@ class StackedModel:
         stacked_input = np.vstack([lgb_pred, nn_pred]).T
         return self.stack_model.predict(stacked_input)
 
-# Now load your stacked model and scaler
+# Load the stacked model (includes scaler inside)
 model = joblib.load('stacked_polymer_model.pkl')
-scaler = joblib.load('polymer_feature_scaler.pkl')
 
-# (Rest of your app code here: featurization, UI, prediction, 3D viewer...)
-
-# Example of fingerprint function
+# Featurization functions
 def featurize_fp(smiles, radius=2, nBits=2048):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
+
     morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits)
     morgan_arr = np.zeros((nBits,), dtype=int)
     DataStructs.ConvertToNumpyArray(morgan_fp, morgan_arr)
+
     maccs_fp = MACCSkeys.GenMACCSKeys(mol)
     maccs_arr = np.zeros((167,), dtype=int)
     DataStructs.ConvertToNumpyArray(maccs_fp, maccs_arr)
+
     return np.concatenate([morgan_arr, maccs_arr])
 
-# 3D viewer function, main app function, etc...
-# Make sure to keep your app code consistent with this model loading
+def calc_extended_descriptors(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
 
-# Example main function
+    desc = [
+        Descriptors.MolWt(mol),
+        Descriptors.MolLogP(mol),
+        Descriptors.TPSA(mol),
+        Descriptors.NumHDonors(mol),
+        Descriptors.NumHAcceptors(mol),
+        Descriptors.RingCount(mol),
+        Descriptors.NumRotatableBonds(mol),
+        Descriptors.FpDensityMorgan1(mol),
+        Descriptors.FpDensityMorgan2(mol),
+        Descriptors.FpDensityMorgan3(mol),
+        Descriptors.HeavyAtomCount(mol),
+        Descriptors.NumValenceElectrons(mol),
+    ]
+    return np.array(desc)
+
+def featurize_full(smiles):
+    fp = featurize_fp(smiles)
+    if fp is None:
+        return None
+    desc = calc_extended_descriptors(smiles)
+    if desc is None:
+        return None
+    return np.concatenate([fp, desc])
+
+# 3D viewer function
+def draw_3d_molecule(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    mol = Chem.AddHs(mol)
+    try:
+        AllChem.EmbedMolecule(mol)
+        AllChem.UFFOptimizeMolecule(mol)
+    except Exception as e:
+        st.warning(f"3D embedding failed: {e}")
+        return None
+    mb = Chem.MolToMolBlock(mol)
+
+    viewer = py3Dmol.view(width=400, height=400)
+    viewer.addModel(mb, 'mol')
+    viewer.setStyle({'stick': {}})
+    viewer.setBackgroundColor('white')
+    viewer.zoomTo()
+    return viewer
+
+# Streamlit app main
 def main():
-    st.title("Polymer Tg Prediction App")
-    
+    st.title("Polymer Tg Prediction + 3D Viewer")
     st.markdown("""
     Welcome to the **Polymer Tg Prediction App**  
     This tool helps you **predict the glass transition temperature (Tg)** of a polymer using its **SMILES structure**.  
@@ -88,22 +116,33 @@ def main():
     """)
 
     smiles = st.text_input("Enter Polymer SMILES:")
-    if st.button("Predict Tg"):
+
+    if st.button("Predict Tg and Show 3D"):
         if not smiles:
             st.error("Please enter a SMILES string.")
             return
 
-        features = featurize_fp(smiles)
+        features = featurize_full(smiles)
         if features is None:
-            st.error("Invalid SMILES or failed fingerprint generation.")
+            st.error("Failed to generate features from the SMILES string.")
             return
 
         features = features.reshape(1, -1)
+
         try:
-            prediction = model.predict(features)
-            st.success(f"Predicted Tg: {prediction[0]:.2f} K")
+            pred = model.predict(features)
+            st.success(f"Predicted Tg: {pred[0]:.2f} K")
         except Exception as e:
             st.error(f"Prediction failed: {e}")
+            return
+
+        st.subheader("3D Polymer Structure")
+        viewer = draw_3d_molecule(smiles)
+        if viewer:
+            viewer_html = viewer._make_html()
+            st.components.v1.html(viewer_html, height=450, width=450)
+        else:
+            st.info("3D structure not available for this molecule.")
 
 if __name__ == "__main__":
     main()
