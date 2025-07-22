@@ -16,15 +16,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SimpleNN(nn.Module):
     def __init__(self, input_dim):
-        super(SimpleNN, self).__init__()
-        self.layer1 = nn.Linear(input_dim, 128)
-        self.relu = nn.ReLU()
-        self.layer2 = nn.Linear(128, 1)
-
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(512, 128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 1)
+        )
     def forward(self, x):
-        x = self.relu(self.layer1(x))
-        x = self.layer2(x)
-        return x
+        return self.net(x)
 
 # Define the stacked model class (must match saved model)
 class StackedModel:
