@@ -1,7 +1,9 @@
+torch
+torchvision
+torchaudio
 streamlit
-rdkit-pypi==2022.9.5
+rdkit-pypi
+joblib
 py3Dmol
 xgboost
-scikit-learn
-joblib
-numpy>=1.21,<2.0
+numpy
