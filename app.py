@@ -1,77 +1,40 @@
 import streamlit as st
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem, MACCSkeys, DataStructs, Descriptors
-import joblib
+import pandas as pd
 import torch
-import py3Dmol
-import torch.nn as nn
-import streamlit.components.v1 as components
+from rdkit import Chem
+from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
+import joblib
+import py3dmol
 
+# Load your trained stacked model and scaler once
+@st.cache_resource(show_spinner=True)
+def load_model_and_scaler():
+    full_model = joblib.load('full_stacked_model.pkl')
+    feature_scaler = joblib.load('feature_scaler.pkl')
+    return full_model, feature_scaler
 
+full_model, feature_scaler = load_model_and_scaler()
 
-# Device for PyTorch model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#class NN for combining model
-
-class SimpleNN(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, 512),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, 128),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 1)
-        )
-    def forward(self, x):
-        return self.net(x)
-
-# Define the stacked model class (must match saved model)
-class StackedModel:
-    def __init__(self, model_lgb, model_nn, stack_model, scaler, input_dim):
-        self.model_lgb = model_lgb
-        self.model_nn = model_nn
-        self.stack_model = stack_model
-        self.scaler = scaler
-        self.input_dim = input_dim
-
-    def predict(self, X_np):
-        X_scaled = self.scaler.transform(X_np)
-        lgb_pred = self.model_lgb.predict(X_scaled)
-        self.model_nn.eval()
-        with torch.no_grad():
-            nn_pred = self.model_nn(torch.tensor(X_scaled, dtype=torch.float32).to(device)).cpu().numpy().reshape(-1)
-        stacked_input = np.vstack([lgb_pred, nn_pred]).T
-        return self.stack_model.predict(stacked_input)
-
-# Load the stacked model (includes scaler inside)
-model = joblib.load('stacked_polymer_model.pkl')
-
 # Featurization functions
-def featurize_fp(smiles, radius=2, nBits=2048):
+def featurize_combo(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
-
-    morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits)
-    morgan_arr = np.zeros((nBits,), dtype=int)
+    morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
+    morgan_arr = np.zeros((2048,), dtype=int)
     DataStructs.ConvertToNumpyArray(morgan_fp, morgan_arr)
-
     maccs_fp = MACCSkeys.GenMACCSKeys(mol)
     maccs_arr = np.zeros((167,), dtype=int)
     DataStructs.ConvertToNumpyArray(maccs_fp, maccs_arr)
-
     return np.concatenate([morgan_arr, maccs_arr])
 
 def calc_extended_descriptors(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
-
     desc = [
         Descriptors.MolWt(mol),
         Descriptors.MolLogP(mol),
@@ -88,82 +51,58 @@ def calc_extended_descriptors(smiles):
     ]
     return np.array(desc)
 
-def featurize_full(smiles):
-    fp = featurize_fp(smiles)
-    if fp is None:
-        return None
+def get_features(smiles):
+    fps = featurize_combo(smiles)
     desc = calc_extended_descriptors(smiles)
-    if desc is None:
+    if fps is None or desc is None:
         return None
-    return np.concatenate([fp, desc])
+    features = np.hstack([fps, desc]).reshape(1, -1)
+    return features
 
-# 3D viewer function
-def draw_3d_molecule(smiles):
+def mol_to_3dviewer(smiles):
     mol = Chem.MolFromSmiles(smiles)
-    mol = Chem.AddHs(mol)
-    try:
-        AllChem.EmbedMolecule(mol)
-        AllChem.UFFOptimizeMolecule(mol)
-    except Exception as e:
-        st.warning(f"3D embedding failed: {e}")
+    if mol is None:
         return None
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol, randomSeed=0xf00d)
+    AllChem.MMFFOptimizeMolecule(mol)
     mb = Chem.MolToMolBlock(mol)
+    view = py3dmol.view(width=400, height=350)
+    view.addModel(mb, 'mol')
+    view.setStyle({'stick': {}})
+    view.setBackgroundColor('0xeeeeee')
+    view.zoomTo()
+    return view.show()
 
-    viewer = py3Dmol.view(width=400, height=400)
-    viewer.addModel(mb, 'mol')
-    viewer.setStyle({'stick': {}})
-    viewer.setBackgroundColor('white')
-    viewer.zoomTo()
-    return viewer
+# Streamlit UI
+st.title("Polymer Property Predictor from SMILES")
+st.write("Enter a **single** polymer SMILES string below and get predicted properties:")
 
-# Streamlit app main
-def main():
-    st.title("Polymer Tg Prediction + 3D Viewer")
-    st.markdown("""
-    Welcome to the **Polymer Tg Prediction App**  
-    This tool helps you **predict the glass transition temperature (Tg)** of a polymer using its **SMILES structure**.  
-    You’ll also get a **3D visualization** of your polymer structure.
+smiles_input = st.text_input("Input Polymer SMILES", "")
 
-    ### What is Tg (Glass Transition Temperature)?
-
-    The **glass transition temperature (Tg)** is the temperature at which a polymer changes from a **hard and brittle "glassy" state** to a **soft and flexible "rubbery" state**.  
-    It's a critical property for determining a polymer's **mechanical behavior**, **flexibility**, and **temperature resistance** in real-world applications.
-
-    ### How to Use:
-    1. Enter a valid **SMILES string** of the polymer.
-    2. Click **Predict Tg and Show 3D** to get:
-        - Estimated **Tg value**
-        - **Interactive 3D model** of your molecule
-    """)
-
-    smiles = st.text_input("Enter Polymer SMILES:")
-
-    if st.button("Predict Tg and Show 3D"):
-        if not smiles:
-            st.error("Please enter a SMILES string.")
-            return
-
-        features = featurize_full(smiles)
-        if features is None:
-            st.error("Failed to generate features from the SMILES string.")
-            return
-
-        features = features.reshape(1, -1)
-
-        try:
-            pred = model.predict(features)
-            st.success(f"Predicted Tg: {pred[0]:.2f} K")
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
-            return
-
-        st.subheader("3D Polymer Structure")
-        viewer = draw_3d_molecule(smiles)
-        if viewer:
-            viewer_html = viewer._make_html()
-            components.html(viewer_html, height=450, width=450)
+if smiles_input.strip():
+    features = get_features(smiles_input)
+    if features is None:
+        st.error("Invalid SMILES string. Please enter a valid polymer SMILES.")
+    else:
+        # Show 3D molecule viewer
+        st.write("### 3D Molecular Structure")
+        mol_view = mol_to_3dviewer(smiles_input)
+        if mol_view is None:
+            st.write("Cannot display 3D structure for this SMILES.")
         else:
-            st.info("3D structure not available for this molecule.")
+            st.components.v1.html(mol_view, height=360)
 
-if __name__ == "__main__":
-    main()
+        # Scale features
+        X_scaled = feature_scaler.transform(features)
+
+        # Predict with full stacked model
+        preds = full_model.predict(features)
+        # preds shape: (1,5) for Tg, FFV, Tc, Density, Rg
+        targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
+        pred_dict = {target: float(preds[0, i]) for i, target in enumerate(targets)}
+
+        st.write("### Predicted Polymer Properties")
+        st.table(pd.DataFrame(pred_dict, index=[0]))
+else:
+    st.info("Please enter a polymer SMILES string to get started.")
