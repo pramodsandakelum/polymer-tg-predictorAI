@@ -6,6 +6,7 @@ import joblib
 import torch
 import py3Dmol
 import torch.nn as nn
+import streamlit.components.v1 as components
 
 
 
@@ -160,7 +161,7 @@ def main():
         viewer = draw_3d_molecule(smiles)
         if viewer:
             viewer_html = viewer._make_html()
-            st.components.v1.html(viewer_html, height=450, width=450)
+            components.html(viewer_html, height=450, width=450)
         else:
             st.info("3D structure not available for this molecule.")
 
