@@ -1,91 +1,121 @@
 import streamlit as st
-import joblib
 import numpy as np
-import py3Dmol
+import pandas as pd
+import joblib
+import torch
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
+import py3Dmol
 
-# Load model and scaler
-model = joblib.load("full_stacked_model.pkl")
-scaler = joblib.load("feature_scaler.pkl")
+# Use GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Define molecular descriptors
-def compute_descriptors(mol):
-    return [
+# -------- FullStackedModel class --------
+class FullStackedModel:
+    def __init__(self, models, nn_models, stack_model, feature_scaler, targets):
+        self.models = models
+        self.nn_models = nn_models
+        self.stack_model = stack_model
+        self.feature_scaler = feature_scaler
+        self.targets = targets
+        self.device = device
+
+    def predict(self, X_raw):
+        X_scaled = self.feature_scaler.transform(X_raw)
+        preds_list = []
+        for target in self.targets:
+            model = self.models[target]
+            model_nn = self.nn_models[target]
+
+            lgb_pred = model.predict(X_scaled)
+
+            model_nn.eval()
+            with torch.no_grad():
+                nn_pred = model_nn(torch.tensor(X_scaled, dtype=torch.float32).to(self.device)).cpu().numpy().reshape(-1)
+
+            preds_avg = (lgb_pred + nn_pred) / 2
+            preds_list.append(preds_avg)
+
+        preds_stack_input = np.vstack(preds_list).T  # shape (n_samples, n_targets)
+        final_preds = self.stack_model.predict(preds_stack_input)
+        return final_preds
+
+# -------- Featurization functions --------
+def featurize_combo(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return np.zeros(2048 + 167)
+    morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
+    morgan_arr = np.zeros((2048,), dtype=int)
+    DataStructs.ConvertToNumpyArray(morgan_fp, morgan_arr)
+    maccs_fp = MACCSkeys.GenMACCSKeys(mol)
+    maccs_arr = np.zeros((167,), dtype=int)
+    DataStructs.ConvertToNumpyArray(maccs_fp, maccs_arr)
+    return np.concatenate([morgan_arr, maccs_arr])
+
+def calc_extended_descriptors(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return np.zeros(12)
+    desc = [
         Descriptors.MolWt(mol),
         Descriptors.MolLogP(mol),
-        Descriptors.NumRotatableBonds(mol),
-        Descriptors.NumHAcceptors(mol),
-        Descriptors.NumHDonors(mol),
         Descriptors.TPSA(mol),
+        Descriptors.NumHDonors(mol),
+        Descriptors.NumHAcceptors(mol),
+        Descriptors.RingCount(mol),
+        Descriptors.NumRotatableBonds(mol),
+        Descriptors.FpDensityMorgan1(mol),
+        Descriptors.FpDensityMorgan2(mol),
+        Descriptors.FpDensityMorgan3(mol),
         Descriptors.HeavyAtomCount(mol),
         Descriptors.NumValenceElectrons(mol),
-        Descriptors.FractionCSP3(mol),
-        Descriptors.RingCount(mol),
-        Descriptors.NHOHCount(mol),
-        Descriptors.NOCount(mol)
     ]
+    return np.array(desc)
 
-# Combine all features
-def featurize(smiles):
-    mol = Chem.MolFromSmiles(smiles)
+# -------- Load model and scaler --------
+@st.cache_resource(show_spinner=False)
+def load_model_and_scaler():
+    model = joblib.load("full_stacked_model.pkl")
+    scaler = joblib.load("feature_scaler.pkl")
+    return model, scaler
+
+model, scaler = load_model_and_scaler()
+
+targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
+
+# -------- Streamlit UI --------
+st.title("Polymer Property Predictor")
+st.write("Enter a polymer SMILES string to predict Tg, FFV, Tc, Density, and Rg.")
+
+smiles_input = st.text_input("Polymer SMILES:", value="CCO")
+
+if st.button("Predict"):
+
+    mol = Chem.MolFromSmiles(smiles_input)
     if mol is None:
-        return None
-    Chem.Kekulize(mol, clearAromaticFlags=True)
+        st.error("Invalid SMILES string! Please enter a valid molecule.")
+    else:
+        # Featurize input
+        fps = featurize_combo(smiles_input)
+        desc = calc_extended_descriptors(smiles_input)
+        X_raw = np.hstack([fps, desc]).reshape(1, -1)
 
-    # Morgan fingerprint
-    morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
-    morgan_fp = np.array(morgan_fp)
+        # Predict
+        preds = model.predict(X_raw)
 
-    # MACCS keys
-    maccs_fp = MACCSkeys.GenMACCSKeys(mol)
-    maccs_fp = np.array(maccs_fp)[1:]  # skip first bit
+        # Display results
+        results_df = pd.DataFrame(preds, columns=targets).T
+        results_df.columns = ["Predicted Value"]
+        st.table(results_df.style.format("{:.4f}"))
 
-    # Molecular descriptors
-    desc = compute_descriptors(mol)
+        # Show 3D molecule
+        mblock = Chem.MolToMolBlock(mol)
+        viewer = py3Dmol.view(width=400, height=300)
+        viewer.addModel(mblock, "mol")
+        viewer.setStyle({"stick": {}})
+        viewer.setBackgroundColor('0xeeeeee')
+        viewer.zoomTo()
+        viewer.show()
+        st.components.v1.html(viewer.js(), height=350)
 
-    # Concatenate all
-    features = np.concatenate([morgan_fp, maccs_fp, desc])
-    return features.reshape(1, -1)
-
-# Display molecule in 3D
-def show_3d(smiles):
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return
-    mol = Chem.AddHs(mol)
-    AllChem.EmbedMolecule(mol)
-    AllChem.MMFFOptimizeMolecule(mol)
-
-    mb = Chem.MolToMolBlock(mol)
-    viewer = py3Dmol.view(width=400, height=400)
-    viewer.addModel(mb, 'mol')
-    viewer.setStyle({'stick': {}})
-    viewer.zoomTo()
-    st.components.v1.html(viewer._make_html(), height=450)
-
-# Streamlit UI
-st.set_page_config(page_title="Polymer Property Predictor", layout="centered")
-st.title("🧪 Polymer Property Predictor")
-st.markdown("Enter a polymer SMILES string below to predict **Tg**, **FFV**, **Tc**, **Density**, and **Rg**.")
-
-smiles = st.text_input("📥 Enter SMILES", "CC(=O)OC1=CC=CC=C1C(=O)O")
-
-if st.button("🔍 Predict Properties"):
-    with st.spinner("Processing..."):
-        features = featurize(smiles)
-        if features is None:
-            st.error("Invalid SMILES. Please check your input.")
-        else:
-            scaled = scaler.transform(features)
-            predictions = model.predict(scaled)[0]
-
-            # Show predictions
-            props = ["Tg (K)", "FFV", "Tc (K)", "Density (g/cm³)", "Rg (Å)"]
-            st.subheader("🔬 Predicted Polymer Properties")
-            for p, v in zip(props, predictions):
-                st.write(f"**{p}**: {v:.2f}")
-
-            # Show 3D molecule
-            st.subheader("🧬 3D Molecular Structure")
-            show_3d(smiles)
