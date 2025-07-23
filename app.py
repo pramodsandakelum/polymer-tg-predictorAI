@@ -108,7 +108,7 @@ def show_3d_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
     html = viewer._make_html()
-    st.components.v1.html(html, height=450)
+    st.components.v1.html(html,width=500, height=450)
 
 if smiles_input:
     # Create two columns for side-by-side layout
