@@ -1,28 +1,21 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import torch
+import joblib
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
-import joblib
+from stmol import showmol
 import py3Dmol
 
-# Load your trained stacked model and scaler once
-@st.cache_resource(show_spinner=True)
-def load_model_and_scaler():
-    full_model = joblib.load('full_stacked_model.pkl')
-    feature_scaler = joblib.load('feature_scaler.pkl')
-    return full_model, feature_scaler
-
-full_model, feature_scaler = load_model_and_scaler()
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Load model and scaler
+model = joblib.load("full_stacked_model.pkl")
+scaler = joblib.load("feature_scaler.pkl")
 
 # Featurization functions
 def featurize_combo(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        return None
+        return np.zeros(2048 + 167)
     morgan_fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
     morgan_arr = np.zeros((2048,), dtype=int)
     DataStructs.ConvertToNumpyArray(morgan_fp, morgan_arr)
@@ -34,7 +27,7 @@ def featurize_combo(smiles):
 def calc_extended_descriptors(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        return None
+        return np.zeros(12)
     desc = [
         Descriptors.MolWt(mol),
         Descriptors.MolLogP(mol),
@@ -51,20 +44,15 @@ def calc_extended_descriptors(smiles):
     ]
     return np.array(desc)
 
-def get_features(smiles):
-    fps = featurize_combo(smiles)
-    desc = calc_extended_descriptors(smiles)
-    if fps is None or desc is None:
-        return None
-    features = np.hstack([fps, desc]).reshape(1, -1)
-    return features
+def featurize(smiles):
+    return np.hstack([featurize_combo(smiles), calc_extended_descriptors(smiles)])
 
 def render_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return
     mol = Chem.AddHs(mol)
-    AllChem.EmbedMolecule(mol, randomSeed=0xf00d)
+    AllChem.EmbedMolecule(mol, randomSeed=42)
     AllChem.MMFFOptimizeMolecule(mol)
     block = Chem.MolToMolBlock(mol)
     viewer = py3Dmol.view(width=400, height=350)
@@ -72,32 +60,24 @@ def render_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.setBackgroundColor('white')
     viewer.zoomTo()
-    st.components.v1.html(viewer.show(), height=360, width=400)
+    showmol(viewer, height=350, width=400)
 
 # Streamlit UI
-st.title("🔬 Polymer Property Predictor from SMILES")
-st.write("Enter a **single** polymer SMILES string below and get predicted properties:")
+st.set_page_config(layout="centered", page_title="Polymer Property Predictor")
+st.title("🔬 Polymer Property Predictor with 3D Viewer")
+st.markdown("Predicts **Tg**, **FFV**, **Tc**, **Density**, and **Rg** from a single SMILES input using a stacked ensemble model.")
 
-smiles_input = st.text_input("📥 Input Polymer SMILES", "")
+smiles_input = st.text_input("📥 Enter a SMILES string", "")
 
-if smiles_input.strip():
-    features = get_features(smiles_input)
-    if features is None:
-        st.error("❌ Invalid SMILES string. Please enter a valid polymer SMILES.")
-    else:
-        # Show 3D molecular structure
-        st.write("### 🧪 3D Molecular Structure")
+if st.button("Predict") and smiles_input.strip():
+    with st.spinner("Featurizing and predicting..."):
+        features = featurize(smiles_input).reshape(1, -1)
+        prediction = model.predict(features)[0]
+        targets = model.targets
+
+        st.subheader("📊 Predicted Polymer Properties")
+        for i, t in enumerate(targets):
+            st.write(f"**{t}**: `{prediction[i]:.2f}`")
+
+        st.subheader("🧪 3D Molecular Structure")
         render_molecule(smiles_input)
-
-        # Scale features
-        X_scaled = feature_scaler.transform(features)
-
-        # Predict with full stacked model
-        preds = full_model.predict(features)
-        targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
-        pred_dict = {target: float(preds[0, i]) for i, target in enumerate(targets)}
-
-        st.write("### 📊 Predicted Polymer Properties")
-        st.table(pd.DataFrame(pred_dict, index=[0]))
-else:
-    st.info("ℹ️ Please enter a polymer SMILES string to get started.")

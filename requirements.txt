@@ -1,9 +1,8 @@
-streamlit
-rdkit-pypi
-scikit-learn
-numpy==1.26.4
-pandas
-py3Dmol
-joblib
-lightgbm
-torch
+streamlit>=1.29
+rdkit-pypi==2022.9.5
+torch>=2.0.0
+joblib>=1.2.0
+scikit-learn>=1.2.2
+lightgbm>=4.0.0
+py3Dmol==1.8.1.post1
+stmol==0.0.9
