@@ -87,66 +87,76 @@ class FullStackedModel:
         final_preds = self.stack_model.predict(preds_stack_input)
         return final_preds
 
-# Load models and scaler (make sure files are in working dir)
+# Load models and scaler (make sure these files are in your working directory)
 feature_scaler = joblib.load('feature_scaler.pkl')
 full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
-# Streamlit app UI
-st.title("Polymer Property Predictor with 3D Viewer")
+st.title("Polymer Property Predictor with 3D Viewer 🔬")
 
-smiles_input = st.text_input("Enter a polymer SMILES string:")
+smiles_input = st.text_input("Enter a polymer SMILES string:", placeholder="e.g. C(C(=O)O)N")
 
 def show_3d_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        st.error("Invalid SMILES")
+        st.error("Invalid SMILES string.")
         return
     mb = Chem.MolToMolBlock(mol)
-    viewer = py3Dmol.view(width=400, height=300)
+    viewer = py3Dmol.view(width=400, height=350)
     viewer.addModel(mb, 'mol')
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
     html = viewer._make_html()
-    st.components.v1.html(html, height=350)
+    st.components.v1.html(html, height=370)
 
 if smiles_input:
-    # Display 3D molecule
-    show_3d_molecule(smiles_input)
+    # Create two columns for side-by-side layout
+    col1, col2 = st.columns([1, 1])
 
-    # Featurize
-    fps = featurize_combo(smiles_input)
-    desc = calc_extended_descriptors(smiles_input)
-    features = np.hstack([fps, desc]).reshape(1, -1)
+    with col1:
+        show_3d_molecule(smiles_input)
 
-    # Predict properties
-    preds = full_model.predict(features)
-    st.write("### Predicted Polymer Properties:")
-    
-    table_html = """
-        <table style="
-            border-collapse: collapse;
-            width: 50%;
-            margin: 0 auto;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        ">
-        <thead>
-            <tr style="background-color: #2980b9; color: white;">
-                <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
-                <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
-            </tr>
-        </thead>
-        <tbody>
-    """
+    with col2:
+        fps = featurize_combo(smiles_input)
+        desc = calc_extended_descriptors(smiles_input)
+        features = np.hstack([fps, desc]).reshape(1, -1)
 
-    for i, target in enumerate(targets):
-        table_html += f"""
-            <tr style="text-align: center;">
-                <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
-            </tr>
+        preds = full_model.predict(features)
+
+        # Build HTML table with styling
+        table_html = """
+            <table style="
+                border-collapse: collapse;
+                width: 100%;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            ">
+            <thead>
+                <tr style="background-color: #2980b9; color: white;">
+                    <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
+                    <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
+                </tr>
+            </thead>
+            <tbody>
         """
 
-    table_html += "</tbody></table>"
+        for i, target in enumerate(targets):
+            table_html += f"""
+                <tr style="text-align: center;">
+                    <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
+                </tr>
+            """
 
-    st.markdown(table_html, unsafe_allow_html=True)
+        table_html += "</tbody></table>"
+
+        st.markdown(table_html, unsafe_allow_html=True)
+
+# Footer
+st.markdown(
+    """
+    <div style="text-align:center; margin-top: 3rem; color: #95a5a6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    Made with ❤️ by Pramod • Powered by Streamlit & RDKit
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
