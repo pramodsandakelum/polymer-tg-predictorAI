@@ -5,7 +5,8 @@ import torch
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
 import joblib
-import py3dmol
+from stmol import showmol
+import py3Dmol
 
 # Load your trained stacked model and scaler once
 @st.cache_resource(show_spinner=True)
@@ -59,50 +60,45 @@ def get_features(smiles):
     features = np.hstack([fps, desc]).reshape(1, -1)
     return features
 
-def mol_to_3dviewer(smiles):
+def render_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        return None
+        return
     mol = Chem.AddHs(mol)
     AllChem.EmbedMolecule(mol, randomSeed=0xf00d)
     AllChem.MMFFOptimizeMolecule(mol)
-    mb = Chem.MolToMolBlock(mol)
-    view = py3dmol.view(width=400, height=350)
-    view.addModel(mb, 'mol')
-    view.setStyle({'stick': {}})
-    view.setBackgroundColor('0xeeeeee')
-    view.zoomTo()
-    return view.show()
+    block = Chem.MolToMolBlock(mol)
+    viewer = py3Dmol.view(width=400, height=350)
+    viewer.addModel(block, 'mol')
+    viewer.setStyle({'stick': {}})
+    viewer.setBackgroundColor('white')
+    viewer.zoomTo()
+    showmol(viewer, height=350, width=400)
 
 # Streamlit UI
-st.title("Polymer Property Predictor from SMILES")
+st.title("🔬 Polymer Property Predictor from SMILES")
 st.write("Enter a **single** polymer SMILES string below and get predicted properties:")
 
-smiles_input = st.text_input("Input Polymer SMILES", "")
+smiles_input = st.text_input("📥 Input Polymer SMILES", "")
 
 if smiles_input.strip():
     features = get_features(smiles_input)
     if features is None:
-        st.error("Invalid SMILES string. Please enter a valid polymer SMILES.")
+        st.error("❌ Invalid SMILES string. Please enter a valid polymer SMILES.")
     else:
-        # Show 3D molecule viewer
-        st.write("### 3D Molecular Structure")
-        mol_view = mol_to_3dviewer(smiles_input)
-        if mol_view is None:
-            st.write("Cannot display 3D structure for this SMILES.")
-        else:
-            st.components.v1.html(mol_view, height=360)
+        # Show 3D molecular structure
+        st.write("### 🧪 3D Molecular Structure")
+        render_molecule(smiles_input)
 
         # Scale features
         X_scaled = feature_scaler.transform(features)
 
         # Predict with full stacked model
         preds = full_model.predict(features)
-        # preds shape: (1,5) for Tg, FFV, Tc, Density, Rg
         targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
         pred_dict = {target: float(preds[0, i]) for i, target in enumerate(targets)}
 
-        st.write("### Predicted Polymer Properties")
+        st.write("### 📊 Predicted Polymer Properties")
         st.table(pd.DataFrame(pred_dict, index=[0]))
 else:
-    st.info("Please enter a polymer SMILES string to get started.")
+    st.info("ℹ️ Please enter a polymer SMILES string to get started.")
