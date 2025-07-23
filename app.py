@@ -1,46 +1,12 @@
 import streamlit as st
-import numpy as np
-import pandas as pd
 import joblib
+import numpy as np
 import torch
+import torch.nn as nn
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
-import py3Dmol
 
-# Use GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# -------- FullStackedModel class --------
-class FullStackedModel:
-    def __init__(self, models, nn_models, stack_model, feature_scaler, targets):
-        self.models = models
-        self.nn_models = nn_models
-        self.stack_model = stack_model
-        self.feature_scaler = feature_scaler
-        self.targets = targets
-        self.device = device
-
-    def predict(self, X_raw):
-        X_scaled = self.feature_scaler.transform(X_raw)
-        preds_list = []
-        for target in self.targets:
-            model = self.models[target]
-            model_nn = self.nn_models[target]
-
-            lgb_pred = model.predict(X_scaled)
-
-            model_nn.eval()
-            with torch.no_grad():
-                nn_pred = model_nn(torch.tensor(X_scaled, dtype=torch.float32).to(self.device)).cpu().numpy().reshape(-1)
-
-            preds_avg = (lgb_pred + nn_pred) / 2
-            preds_list.append(preds_avg)
-
-        preds_stack_input = np.vstack(preds_list).T  # shape (n_samples, n_targets)
-        final_preds = self.stack_model.predict(preds_stack_input)
-        return final_preds
-
-# -------- Featurization functions --------
+# Define featurization functions
 def featurize_combo(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -73,49 +39,69 @@ def calc_extended_descriptors(smiles):
     ]
     return np.array(desc)
 
-# -------- Load model and scaler --------
-@st.cache_resource(show_spinner=False)
-def load_model_and_scaler():
-    model = joblib.load("full_stacked_model.pkl")
-    scaler = joblib.load("feature_scaler.pkl")
-    return model, scaler
+# Define the SimpleNN class exactly as in training
+class SimpleNN(nn.Module):
+    def __init__(self, input_dim, output_dim=1, hidden_dims=[512, 128], dropout_rates=[0.3, 0.2]):
+        super().__init__()
+        layers = []
+        prev_dim = input_dim
+        for hdim, drop in zip(hidden_dims, dropout_rates):
+            layers.append(nn.Linear(prev_dim, hdim))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(drop))
+            prev_dim = hdim
+        layers.append(nn.Linear(prev_dim, output_dim))
+        self.net = nn.Sequential(*layers)
 
-model, scaler = load_model_and_scaler()
+    def forward(self, x):
+        return self.net(x)
 
-targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
+# Define FullStackedModel class exactly as in training
+class FullStackedModel:
+    def __init__(self, models, nn_models, stack_model, feature_scaler, targets):
+        self.models = models
+        self.nn_models = nn_models
+        self.stack_model = stack_model
+        self.feature_scaler = feature_scaler
+        self.targets = targets
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# -------- Streamlit UI --------
+    def predict(self, X_raw):
+        X_scaled = self.feature_scaler.transform(X_raw)
+        preds_list = []
+        for target in self.targets:
+            model = self.models[target]
+            model_nn = self.nn_models[target]
+
+            lgb_pred = model.predict(X_scaled)
+
+            model_nn.eval()
+            with torch.no_grad():
+                nn_pred = model_nn(torch.tensor(X_scaled, dtype=torch.float32).to(self.device)).cpu().numpy().reshape(-1)
+
+            preds_avg = (lgb_pred + nn_pred) / 2
+            preds_list.append(preds_avg)
+
+        preds_stack_input = np.vstack(preds_list).T  # shape (n_samples, n_targets)
+        final_preds = self.stack_model.predict(preds_stack_input)
+        return final_preds
+
+# Load scaler and model after the above definitions
+feature_scaler = joblib.load('feature_scaler.pkl')
+full_model = joblib.load('full_stacked_model.pkl')
+
+# Your Streamlit UI code below
 st.title("Polymer Property Predictor")
-st.write("Enter a polymer SMILES string to predict Tg, FFV, Tc, Density, and Rg.")
 
-smiles_input = st.text_input("Polymer SMILES:", value="CCO")
+smiles_input = st.text_input("Enter a SMILES string:")
 
-if st.button("Predict"):
+if smiles_input:
+    fps = featurize_combo(smiles_input)
+    desc = calc_extended_descriptors(smiles_input)
+    features = np.hstack([fps, desc]).reshape(1, -1)
 
-    mol = Chem.MolFromSmiles(smiles_input)
-    if mol is None:
-        st.error("Invalid SMILES string! Please enter a valid molecule.")
-    else:
-        # Featurize input
-        fps = featurize_combo(smiles_input)
-        desc = calc_extended_descriptors(smiles_input)
-        X_raw = np.hstack([fps, desc]).reshape(1, -1)
+    prediction = full_model.predict(features)
 
-        # Predict
-        preds = model.predict(X_raw)
-
-        # Display results
-        results_df = pd.DataFrame(preds, columns=targets).T
-        results_df.columns = ["Predicted Value"]
-        st.table(results_df.style.format("{:.4f}"))
-
-        # Show 3D molecule
-        mblock = Chem.MolToMolBlock(mol)
-        viewer = py3Dmol.view(width=400, height=300)
-        viewer.addModel(mblock, "mol")
-        viewer.setStyle({"stick": {}})
-        viewer.setBackgroundColor('0xeeeeee')
-        viewer.zoomTo()
-        viewer.show()
-        st.components.v1.html(viewer.js(), height=350)
-
+    targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
+    for i, target in enumerate(targets):
+        st.write(f"{target}: {prediction[0, i]:.4f}")
