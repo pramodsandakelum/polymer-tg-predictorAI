@@ -93,94 +93,14 @@ full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
 # Streamlit app UI
-st.markdown(
-    """
-    <style>
-    .title {
-        text-align: center;
-        color: #2c3e50;
-        font-size: 3rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    /* Container for flex layout */
-    .container-flex {
-        display: flex;
-        justify-content: center;
-        gap: 3rem;
-        flex-wrap: wrap;
-        margin-top: 1rem;
-    }
-    /* Left pane: 3D viewer */
-    .viewer-container {
-        border: 2px solid #3498db;
-        border-radius: 12px;
-        padding: 10px;
-        box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
-        max-width: 450px;
-        height: 350px;
-        flex-shrink: 0;
-    }
-    /* Right pane: prediction cards grid */
-    .pred-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        max-width: 300px;
-    }
-    .pred-card {
-        background: #ecf0f1;
-        border-radius: 12px;
-        padding: 1rem 1.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        text-align: center;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        transition: transform 0.2s ease;
-    }
-    .pred-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-    }
-    .pred-title {
-        font-weight: 700;
-        color: #2980b9;
-        margin-bottom: 0.25rem;
-        font-size: 1.2rem;
-    }
-    .pred-value {
-        font-size: 1.6rem;
-        font-weight: 600;
-        color: #27ae60;
-    }
-    /* Footer */
-    .footer {
-        margin-top: 3rem;
-        text-align: center;
-        font-size: 0.9rem;
-        color: #95a5a6;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.title("Polymer Property Predictor with 3D Viewer")
 
-# Title
-st.markdown('<h1 class="title">Polymer Property Predictor with 3D Viewer 🔬</h1>', unsafe_allow_html=True)
-
-# Input box with help tooltip
-smiles_input = st.text_input(
-    label="Enter a polymer SMILES string:",
-    placeholder="e.g. C(C(=O)O)N (Glycine)",
-    key="smiles_input",
-    help="Input the SMILES notation of your polymer molecule. Example: C(C(=O)O)N"
-)
+smiles_input = st.text_input("Enter a polymer SMILES string:")
 
 def show_3d_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        st.error("Invalid SMILES: Could not parse molecule.")
+        st.error("Invalid SMILES")
         return
     mb = Chem.MolToMolBlock(mol)
     viewer = py3Dmol.view(width=400, height=300)
@@ -188,42 +108,19 @@ def show_3d_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
     html = viewer._make_html()
-    return html
+    st.components.v1.html(html, height=350)
 
 if smiles_input:
-    html_3d = show_3d_molecule(smiles_input)
-    # Featurize & predict
+    # Display 3D molecule
+    show_3d_molecule(smiles_input)
+
+    # Featurize
     fps = featurize_combo(smiles_input)
     desc = calc_extended_descriptors(smiles_input)
     features = np.hstack([fps, desc]).reshape(1, -1)
+
+    # Predict properties
     preds = full_model.predict(features)
-
-    # Render side-by-side flexbox layout
-    st.markdown('<div class="container-flex">', unsafe_allow_html=True)
-
-    # Left: 3D viewer container
-    st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
-    st.components.v1.html(html_3d, height=350)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Right: Predictions cards
-    st.markdown('<div class="pred-grid">', unsafe_allow_html=True)
+    st.write("### Predicted Polymer Properties:")
     for i, target in enumerate(targets):
-        st.markdown(
-            f'''
-            <div class="pred-card">
-                <div class="pred-title">{target}</div>
-                <div class="pred-value">{preds[0, i]:.4f}</div>
-            </div>
-            ''',
-            unsafe_allow_html=True,
-        )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)  # close container-flex
-
-# Footer
-st.markdown(
-    '<div class="footer">Made with ❤️ by Pramod • Powered by Streamlit and RDKit</div>',
-    unsafe_allow_html=True,
-)
+        st.write(f"**{target}:** {preds[0, i]:.4f}")
