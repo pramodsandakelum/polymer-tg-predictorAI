@@ -87,69 +87,122 @@ class FullStackedModel:
         final_preds = self.stack_model.predict(preds_stack_input)
         return final_preds
 
-# Load models and scaler (make sure files are in working dir)
+# Load models and scaler
 feature_scaler = joblib.load('feature_scaler.pkl')
 full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
-# Streamlit app UI
-st.title("Polymer Property Predictor with 3D Viewer")
+# Streamlit UI setup
+st.set_page_config(page_title="Polymer Property Predictor", layout="wide")
 
-smiles_input = st.text_input("Enter a polymer SMILES string:")
-
-def show_3d_molecule(smiles):
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        st.error("Invalid SMILES")
-        return
-    mb = Chem.MolToMolBlock(mol)
-    viewer = py3Dmol.view(width=400, height=300)
-    viewer.addModel(mb, 'mol')
-    viewer.setStyle({'stick': {}})
-    viewer.zoomTo()
-    html = viewer._make_html()
-    st.components.v1.html(html, height=350)
-
-if smiles_input:
-    # Display 3D molecule
-    show_3d_molecule(smiles_input)
-
-    # Featurize
-    fps = featurize_combo(smiles_input)
-    desc = calc_extended_descriptors(smiles_input)
-    features = np.hstack([fps, desc]).reshape(1, -1)
-
-    # Predict properties
-    # Predict properties
-preds = full_model.predict(features)
-
-# Build HTML table with borders and styling
-table_html = """
-<table style="
-    width: 300px; 
-    border-collapse: collapse; 
-    margin: 0 auto;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-">
-    <thead>
-        <tr style="background-color: #2980b9; color: white;">
-            <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
-            <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
-        </tr>
-    </thead>
-    <tbody>
-"""
-
-for i, target in enumerate(targets):
-    table_html += f"""
-        <tr style="text-align: center;">
-            <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
-        </tr>
+st.markdown(
     """
+    <style>
+    .title {
+        text-align: center;
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #2c3e50;
+    }
+    .viewer-container {
+        border: 2px solid #3498db;
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
+        margin-bottom: 1rem;
+        height: 350px;
+    }
+    table {
+        border-collapse: collapse;
+        margin: 0 auto;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        width: 100%;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 12px;
+        text-align: center;
+    }
+    thead {
+        background-color: #2980b9;
+        color: white;
+    }
+    tbody tr:hover {
+        background-color: #f1f1f1;
+    }
+    .pred-value {
+        font-weight: 600;
+        color: #27ae60;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-table_html += "</tbody></table>"
+st.markdown('<h1 class="title">Polymer Property Predictor with 3D Viewer 🔬</h1>', unsafe_allow_html=True)
 
-# Render the table
-st.markdown(table_html, unsafe_allow_html=True)
+col1, col2 = st.columns([1, 1])
 
+with col1:
+    smiles_input = st.text_input("Enter a polymer SMILES string:", placeholder="e.g. C(C(=O)O)N")
+
+    def show_3d_molecule(smiles):
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            st.error("Invalid SMILES: Could not parse molecule.")
+            return
+        mb = Chem.MolToMolBlock(mol)
+        viewer = py3Dmol.view(width=400, height=350)
+        viewer.addModel(mb, 'mol')
+        viewer.setStyle({'stick': {}})
+        viewer.zoomTo()
+        html = viewer._make_html()
+        st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
+        st.components.v1.html(html, height=370)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if smiles_input:
+        show_3d_molecule(smiles_input)
+
+with col2:
+    if smiles_input:
+        fps = featurize_combo(smiles_input)
+        desc = calc_extended_descriptors(smiles_input)
+        features = np.hstack([fps, desc]).reshape(1, -1)
+        preds = full_model.predict(features)
+
+        table_html = """
+        <table>
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Predicted Value</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        for i, target in enumerate(targets):
+            table_html += f"""
+            <tr>
+                <td>{target}</td>
+                <td class="pred-value">{preds[0, i]:.4f}</td>
+            </tr>
+            """
+        table_html += """
+            </tbody>
+        </table>
+        """
+
+        st.markdown(table_html, unsafe_allow_html=True)
+
+# Footer
+st.markdown(
+    """
+    <div style="text-align:center; margin-top: 3rem; color: #95a5a6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    Made with ❤️ by Pramod • Powered by Streamlit & RDKit
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
