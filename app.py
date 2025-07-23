@@ -6,6 +6,7 @@ import torch.nn as nn
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
 import py3Dmol
+import pandas as pd
 
 # Featurization functions (same as training)
 def featurize_combo(smiles):
@@ -87,84 +88,73 @@ class FullStackedModel:
         final_preds = self.stack_model.predict(preds_stack_input)
         return final_preds
 
-# Load models and scaler
+# Load models and scaler (make sure files are in working dir)
 feature_scaler = joblib.load('feature_scaler.pkl')
 full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
-# Streamlit UI setup
-st.set_page_config(page_title="Polymer Property Predictor", layout="wide")
-
+# Styling CSS
 st.markdown(
     """
     <style>
-    .title {
-        text-align: center;
-        font-size: 3rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #2c3e50;
-    }
-    .viewer-container {
-        border: 2px solid #3498db;
+    .viewer-wrapper {
+        border: 3px solid #3498db;
         border-radius: 12px;
-        padding: 10px;
-        box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
+        padding: 5px;
+        max-width: 450px;
         margin-bottom: 1rem;
-        height: 350px;
+        margin-left: auto;
+        margin-right: auto;
     }
-    table {
-        border-collapse: collapse;
+    table.dataframe {
         margin: 0 auto;
+        border-collapse: collapse;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         width: 100%;
     }
-    th, td {
-        border: 1px solid #ddd;
-        padding: 12px;
-        text-align: center;
+    table.dataframe th, table.dataframe td {
+        border: 1px solid #ddd !important;
+        padding: 12px !important;
+        text-align: center !important;
     }
-    thead {
-        background-color: #2980b9;
-        color: white;
+    table.dataframe thead {
+        background-color: #2980b9 !important;
+        color: white !important;
     }
     tbody tr:hover {
-        background-color: #f1f1f1;
+        background-color: #f1f1f1 !important;
     }
     .pred-value {
         font-weight: 600;
         color: #27ae60;
     }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """, unsafe_allow_html=True
 )
 
-st.markdown('<h1 class="title">Polymer Property Predictor with 3D Viewer 🔬</h1>', unsafe_allow_html=True)
+st.title("Polymer Property Predictor with 3D Viewer 🔬")
 
-col1, col2 = st.columns([1, 1])
+col1, col2 = st.columns(2)
 
 with col1:
     smiles_input = st.text_input("Enter a polymer SMILES string:", placeholder="e.g. C(C(=O)O)N")
 
-    def show_3d_molecule(smiles):
-        mol = Chem.MolFromSmiles(smiles)
+    if smiles_input:
+        mol = Chem.MolFromSmiles(smiles_input)
         if mol is None:
             st.error("Invalid SMILES: Could not parse molecule.")
-            return
-        mb = Chem.MolToMolBlock(mol)
-        viewer = py3Dmol.view(width=400, height=350)
-        viewer.addModel(mb, 'mol')
-        viewer.setStyle({'stick': {}})
-        viewer.zoomTo()
-        html = viewer._make_html()
-        st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
-        st.components.v1.html(html, height=370)
-        st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            mb = Chem.MolToMolBlock(mol)
+            viewer = py3Dmol.view(width=400, height=350)
+            viewer.addModel(mb, 'mol')
+            viewer.setStyle({'stick': {}})
+            viewer.zoomTo()
+            html = viewer._make_html()
 
-    if smiles_input:
-        show_3d_molecule(smiles_input)
+            # Wrap the 3D viewer in a bordered div container
+            st.markdown('<div class="viewer-wrapper">', unsafe_allow_html=True)
+            st.components.v1.html(html, height=370)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
     if smiles_input:
@@ -173,29 +163,17 @@ with col2:
         features = np.hstack([fps, desc]).reshape(1, -1)
         preds = full_model.predict(features)
 
-        table_html = """
-        <table>
-            <thead>
-                <tr>
-                    <th>Property</th>
-                    <th>Predicted Value</th>
-                </tr>
-            </thead>
-            <tbody>
-        """
-        for i, target in enumerate(targets):
-            table_html += f"""
-            <tr>
-                <td>{target}</td>
-                <td class="pred-value">{preds[0, i]:.4f}</td>
-            </tr>
-            """
-        table_html += """
-            </tbody>
-        </table>
-        """
+        # Prepare DataFrame for nicer display
+        df_preds = pd.DataFrame({
+            "Property": targets,
+            "Predicted Value": [f"{v:.4f}" for v in preds[0]]
+        })
 
-        st.markdown(table_html, unsafe_allow_html=True)
+        # Style the dataframe for border & color on predicted values
+        def highlight_pred(val):
+            return 'color: #27ae60; font-weight: 600'
+
+        st.dataframe(df_preds.style.applymap(highlight_pred, subset=["Predicted Value"]))
 
 # Footer
 st.markdown(
