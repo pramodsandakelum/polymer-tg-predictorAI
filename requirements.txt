@@ -1,7 +1,7 @@
 streamlit
 rdkit-pypi
 scikit-learn
-numpy
+numpy==1.26.4
 pandas
 py3Dmol
 joblib
