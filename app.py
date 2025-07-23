@@ -146,6 +146,6 @@ if smiles_input:
         </tr>
         """
 
-    table_html += "</tbody></table>"
+        table_html += "</tbody></table>"
 
     st.markdown(table_html, unsafe_allow_html=True)
