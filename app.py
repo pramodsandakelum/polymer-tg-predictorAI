@@ -93,14 +93,103 @@ full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
 # Streamlit app UI
-st.title("Polymer Property Predictor with 3D Viewer")
+st.markdown(
+    """
+    <style>
+    /* Center page title */
+    .title {
+        text-align: center;
+        color: #2c3e50;
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* Input box styling */
+    .smiles-input > div > div > input {
+        font-size: 1.25rem;
+        padding: 10px;
+        border-radius: 8px;
+        border: 2px solid #2980b9;
+        transition: border-color 0.3s ease;
+    }
+    .smiles-input > div > div > input:focus {
+        border-color: #27ae60;
+        outline: none;
+        box-shadow: 0 0 5px #27ae60;
+    }
+    /* 3D viewer container */
+    .viewer-container {
+        border: 2px solid #3498db;
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
+        margin-bottom: 2rem;
+        max-width: 450px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    /* Prediction cards */
+    .pred-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .pred-card {
+        background: #ecf0f1;
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        min-width: 120px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        transition: transform 0.2s ease;
+    }
+    .pred-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    }
+    .pred-title {
+        font-weight: 700;
+        color: #2980b9;
+        margin-bottom: 0.25rem;
+        font-size: 1.1rem;
+    }
+    .pred-value {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #27ae60;
+    }
+    /* Footer */
+    .footer {
+        margin-top: 3rem;
+        text-align: center;
+        font-size: 0.9rem;
+        color: #95a5a6;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-smiles_input = st.text_input("Enter a polymer SMILES string:")
+# Title
+st.markdown('<h1 class="title">Polymer Property Predictor with 3D Viewer 🔬</h1>', unsafe_allow_html=True)
+
+# Input box with help tooltip
+smiles_input = st.text_input(
+    label="Enter a polymer SMILES string:",
+    placeholder="e.g. C(C(=O)O)N (Glycine)",
+    key="smiles_input",
+    help="Input the SMILES notation of your polymer molecule. Example: C(C(=O)O)N"
+)
 
 def show_3d_molecule(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        st.error("Invalid SMILES")
+        st.error("Invalid SMILES: Could not parse molecule.")
         return
     mb = Chem.MolToMolBlock(mol)
     viewer = py3Dmol.view(width=400, height=300)
@@ -108,10 +197,11 @@ def show_3d_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
     html = viewer._make_html()
+    st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
     st.components.v1.html(html, height=350)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if smiles_input:
-    # Display 3D molecule
     show_3d_molecule(smiles_input)
 
     # Featurize
@@ -121,6 +211,23 @@ if smiles_input:
 
     # Predict properties
     preds = full_model.predict(features)
-    st.write("### Predicted Polymer Properties:")
+
+    # Show results in cards grid
+    st.markdown('<div class="pred-grid">', unsafe_allow_html=True)
     for i, target in enumerate(targets):
-        st.write(f"**{target}:** {preds[0, i]:.4f}")
+        st.markdown(
+            f'''
+            <div class="pred-card">
+                <div class="pred-title">{target}</div>
+                <div class="pred-value">{preds[0, i]:.4f}</div>
+            </div>
+            ''',
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Footer
+st.markdown(
+    '<div class="footer">Made with ❤️ by Pramod • Powered by Streamlit and RDKit</div>',
+    unsafe_allow_html=True,
+)
