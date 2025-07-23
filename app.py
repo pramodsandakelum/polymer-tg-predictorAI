@@ -143,7 +143,7 @@ if smiles_input:
         for i, target in enumerate(targets):
             table_html += f"""
                 <tr style="text-align: center;">
-                    <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; background-color: #2980b9;">{target}</td>
                     <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
                 </tr>
             """
