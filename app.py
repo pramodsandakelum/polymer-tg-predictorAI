@@ -122,30 +122,31 @@ if smiles_input:
     # Predict properties
     preds = full_model.predict(features)
     st.write("### Predicted Polymer Properties:")
+    
     table_html = """
-                    <table style="
-                    border-collapse: collapse;
-                    width: 50%;
-                    margin: 0 auto;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    ">
-                    <thead>
-                        <tr style="background-color: #2980b9; color: white;">
-                        <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
-                        <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    """
+        <table style="
+            border-collapse: collapse;
+            width: 50%;
+            margin: 0 auto;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        ">
+        <thead>
+            <tr style="background-color: #2980b9; color: white;">
+                <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
+            </tr>
+        </thead>
+        <tbody>
+    """
 
     for i, target in enumerate(targets):
-    table_html += f"""
-        <tr style="text-align: center;">
-            <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
-            <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
-        </tr>
+        table_html += f"""
+            <tr style="text-align: center;">
+                <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
+            </tr>
         """
 
-        table_html += "</tbody></table>"
+    table_html += "</tbody></table>"
 
     st.markdown(table_html, unsafe_allow_html=True)
