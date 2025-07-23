@@ -96,52 +96,43 @@ targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 st.markdown(
     """
     <style>
-    /* Center page title */
     .title {
         text-align: center;
         color: #2c3e50;
         font-size: 3rem;
         font-weight: 700;
-        margin-bottom: 0.25rem;
+        margin-bottom: 1rem;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    /* Input box styling */
-    .smiles-input > div > div > input {
-        font-size: 1.25rem;
-        padding: 10px;
-        border-radius: 8px;
-        border: 2px solid #2980b9;
-        transition: border-color 0.3s ease;
+    /* Container for flex layout */
+    .container-flex {
+        display: flex;
+        justify-content: center;
+        gap: 3rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
     }
-    .smiles-input > div > div > input:focus {
-        border-color: #27ae60;
-        outline: none;
-        box-shadow: 0 0 5px #27ae60;
-    }
-    /* 3D viewer container */
+    /* Left pane: 3D viewer */
     .viewer-container {
         border: 2px solid #3498db;
         border-radius: 12px;
         padding: 10px;
         box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
-        margin-bottom: 2rem;
         max-width: 450px;
-        margin-left: auto;
-        margin-right: auto;
+        height: 350px;
+        flex-shrink: 0;
     }
-    /* Prediction cards */
+    /* Right pane: prediction cards grid */
     .pred-grid {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
+        flex-direction: column;
         gap: 1rem;
-        margin-top: 1rem;
+        max-width: 300px;
     }
     .pred-card {
         background: #ecf0f1;
         border-radius: 12px;
         padding: 1rem 1.5rem;
-        min-width: 120px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         text-align: center;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -155,10 +146,10 @@ st.markdown(
         font-weight: 700;
         color: #2980b9;
         margin-bottom: 0.25rem;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
     }
     .pred-value {
-        font-size: 1.4rem;
+        font-size: 1.6rem;
         font-weight: 600;
         color: #27ae60;
     }
@@ -197,22 +188,25 @@ def show_3d_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
     html = viewer._make_html()
-    st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
-    st.components.v1.html(html, height=350)
-    st.markdown('</div>', unsafe_allow_html=True)
+    return html
 
 if smiles_input:
-    show_3d_molecule(smiles_input)
-
-    # Featurize
+    html_3d = show_3d_molecule(smiles_input)
+    # Featurize & predict
     fps = featurize_combo(smiles_input)
     desc = calc_extended_descriptors(smiles_input)
     features = np.hstack([fps, desc]).reshape(1, -1)
-
-    # Predict properties
     preds = full_model.predict(features)
 
-    # Show results in cards grid
+    # Render side-by-side flexbox layout
+    st.markdown('<div class="container-flex">', unsafe_allow_html=True)
+
+    # Left: 3D viewer container
+    st.markdown('<div class="viewer-container">', unsafe_allow_html=True)
+    st.components.v1.html(html_3d, height=350)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Right: Predictions cards
     st.markdown('<div class="pred-grid">', unsafe_allow_html=True)
     for i, target in enumerate(targets):
         st.markdown(
@@ -225,6 +219,8 @@ if smiles_input:
             unsafe_allow_html=True,
         )
     st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # close container-flex
 
 # Footer
 st.markdown(
