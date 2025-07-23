@@ -5,7 +5,6 @@ import torch
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
 import joblib
-from stmol import showmol
 import py3Dmol
 
 # Load your trained stacked model and scaler once
@@ -73,7 +72,7 @@ def render_molecule(smiles):
     viewer.setStyle({'stick': {}})
     viewer.setBackgroundColor('white')
     viewer.zoomTo()
-    showmol(viewer, height=350, width=400)
+    st.components.v1.html(viewer.show(), height=360, width=400)
 
 # Streamlit UI
 st.title("🔬 Polymer Property Predictor from SMILES")
