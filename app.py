@@ -134,9 +134,9 @@ st.markdown(
 
 st.title("Polymer Property Predictor with 3D Viewer 🔬")
 
-col1, col2 = st.columns(2)
 
-with col1:
+
+
     smiles_input = st.text_input("Enter a polymer SMILES string:", placeholder="e.g. C(C(=O)O)N")
 
     if smiles_input:
@@ -156,7 +156,7 @@ with col1:
             st.components.v1.html(html, height=370)
             
 
-with col2:
+
     if smiles_input:
         fps = featurize_combo(smiles_input)
         desc = calc_extended_descriptors(smiles_input)
