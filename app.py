@@ -133,7 +133,7 @@ if smiles_input:
                 background-color: #121212;
             ">
             <thead>
-                <tr style="background-color: #121212; color: black;">
+                <tr style="background-color: #1E88E5; color: #E0E0E0;">
                     <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
                     <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
                 </tr>
@@ -143,9 +143,9 @@ if smiles_input:
 
         for i, target in enumerate(targets):
             table_html += f"""
-                <tr style="text-align: center;">
-                    <td style="border: 1px solid #ddd; padding: 8px; background-color: #121212;">{target}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
+                <tr style="text-align: center; background-color: #1E1E1E;">
+                    <td style="border: 1px solid #ddd; padding: 8px; color: #CCCCCC;">{target}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #CCCCCC;">{preds[0, i]:.4f}</td>
                 </tr>
             """
 
