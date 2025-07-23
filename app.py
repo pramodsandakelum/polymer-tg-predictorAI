@@ -5,8 +5,9 @@ import torch
 import torch.nn as nn
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
+import py3Dmol
 
-# Define featurization functions
+# Featurization functions (same as training)
 def featurize_combo(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -39,7 +40,7 @@ def calc_extended_descriptors(smiles):
     ]
     return np.array(desc)
 
-# Define the SimpleNN class exactly as in training
+# Your NN model class from training
 class SimpleNN(nn.Module):
     def __init__(self, input_dim, output_dim=1, hidden_dims=[512, 128], dropout_rates=[0.3, 0.2]):
         super().__init__()
@@ -56,7 +57,7 @@ class SimpleNN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# Define FullStackedModel class exactly as in training
+# Full stacked model wrapper
 class FullStackedModel:
     def __init__(self, models, nn_models, stack_model, feature_scaler, targets):
         self.models = models
@@ -86,22 +87,40 @@ class FullStackedModel:
         final_preds = self.stack_model.predict(preds_stack_input)
         return final_preds
 
-# Load scaler and model after the above definitions
+# Load models and scaler (make sure files are in working dir)
 feature_scaler = joblib.load('feature_scaler.pkl')
 full_model = joblib.load('full_stacked_model.pkl')
+targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
-# Your Streamlit UI code below
-st.title("Polymer Property Predictor")
+# Streamlit app UI
+st.title("Polymer Property Predictor with 3D Viewer")
 
-smiles_input = st.text_input("Enter a SMILES string:")
+smiles_input = st.text_input("Enter a polymer SMILES string:")
+
+def show_3d_molecule(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        st.error("Invalid SMILES")
+        return
+    mb = Chem.MolToMolBlock(mol)
+    viewer = py3Dmol.view(width=400, height=300)
+    viewer.addModel(mb, 'mol')
+    viewer.setStyle({'stick': {}})
+    viewer.zoomTo()
+    html = viewer._make_html()
+    st.components.v1.html(html, height=350)
 
 if smiles_input:
+    # Display 3D molecule
+    show_3d_molecule(smiles_input)
+
+    # Featurize
     fps = featurize_combo(smiles_input)
     desc = calc_extended_descriptors(smiles_input)
     features = np.hstack([fps, desc]).reshape(1, -1)
 
-    prediction = full_model.predict(features)
-
-    targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
+    # Predict properties
+    preds = full_model.predict(features)
+    st.write("### Predicted Polymer Properties:")
     for i, target in enumerate(targets):
-        st.write(f"{target}: {prediction[0, i]:.4f}")
+        st.write(f"**{target}:** {preds[0, i]:.4f}")
