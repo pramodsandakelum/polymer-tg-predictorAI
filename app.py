@@ -132,7 +132,7 @@ if smiles_input:
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             ">
             <thead>
-                <tr style="background-color: #2980b9; color: white;">
+                <tr style="background-color: #2980b9; color: black;">
                     <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
                     <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
                 </tr>
