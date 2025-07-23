@@ -152,9 +152,9 @@ with col1:
             html = viewer._make_html()
 
             # Wrap the 3D viewer in a bordered div container
-            st.markdown('<div class="viewer-wrapper">', unsafe_allow_html=True)
+            
             st.components.v1.html(html, height=370)
-            st.markdown('</div>', unsafe_allow_html=True)
+            
 
 with col2:
     if smiles_input:
