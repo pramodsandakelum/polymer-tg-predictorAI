@@ -6,6 +6,7 @@ import torch.nn as nn
 from rdkit import Chem
 from rdkit.Chem import AllChem, MACCSkeys, Descriptors, DataStructs
 import py3Dmol
+import streamlit.components.v1 as components
 
 # Featurization functions (same as training)
 def featurize_combo(smiles):
@@ -149,7 +150,7 @@ if smiles_input:
 
         table_html += "</tbody></table>"
 
-        st.markdown(table_html, unsafe_allow_html=True)
+        components.html(table_html, height=250)
 
 # Footer
 st.markdown(
