@@ -93,44 +93,7 @@ feature_scaler = joblib.load('feature_scaler.pkl')
 full_model = joblib.load('full_stacked_model.pkl')
 targets = ['Tg', 'FFV', 'Tc', 'Density', 'Rg']
 
-# Styling CSS
-st.markdown(
-    """
-    <style>
-    .viewer-wrapper {
-        border: 3px solid #3498db;
-        border-radius: 12px;
-        padding: 5px;
-        max-width: 450px;
-        margin-bottom: 1rem;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    table.dataframe {
-        margin: 0 auto;
-        border-collapse: collapse;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        width: 100%;
-    }
-    table.dataframe th, table.dataframe td {
-        border: 1px solid #ddd !important;
-        padding: 12px !important;
-        text-align: center !important;
-    }
-    table.dataframe thead {
-        background-color: #2980b9 !important;
-        color: white !important;
-    }
-    tbody tr:hover {
-        background-color: #f1f1f1 !important;
-    }
-    .pred-value {
-        font-weight: 600;
-        color: #27ae60;
-    }
-    </style>
-    """, unsafe_allow_html=True
-)
+
 
 st.title("Polymer Property Predictor with 3D Viewer 🔬")
 
