@@ -120,7 +120,36 @@ if smiles_input:
     features = np.hstack([fps, desc]).reshape(1, -1)
 
     # Predict properties
-    preds = full_model.predict(features)
-    st.write("### Predicted Polymer Properties:")
-    for i, target in enumerate(targets):
-        st.write(f"**{target}:** {preds[0, i]:.4f}")
+    # Predict properties
+preds = full_model.predict(features)
+
+# Build HTML table with borders and styling
+table_html = """
+<table style="
+    width: 300px; 
+    border-collapse: collapse; 
+    margin: 0 auto;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+">
+    <thead>
+        <tr style="background-color: #2980b9; color: white;">
+            <th style="border: 1px solid #ddd; padding: 8px;">Property</th>
+            <th style="border: 1px solid #ddd; padding: 8px;">Predicted Value</th>
+        </tr>
+    </thead>
+    <tbody>
+"""
+
+for i, target in enumerate(targets):
+    table_html += f"""
+        <tr style="text-align: center;">
+            <td style="border: 1px solid #ddd; padding: 8px;">{target}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600; color: #27ae60;">{preds[0, i]:.4f}</td>
+        </tr>
+    """
+
+table_html += "</tbody></table>"
+
+# Render the table
+st.markdown(table_html, unsafe_allow_html=True)
+
