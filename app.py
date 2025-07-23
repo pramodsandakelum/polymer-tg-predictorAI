@@ -103,7 +103,7 @@ def show_3d_molecule(smiles):
         st.error("Invalid SMILES string.")
         return
     mb = Chem.MolToMolBlock(mol)
-    viewer = py3Dmol.view(width=400, height=350)
+    viewer = py3Dmol.view(width=500, height=450)
     viewer.addModel(mb, 'mol')
     viewer.setStyle({'stick': {}})
     viewer.zoomTo()
@@ -151,7 +151,7 @@ if smiles_input:
 
         table_html += "</tbody></table>"
 
-        components.html(table_html, height=250)
+        components.html(table_html, height=450)
 
 # Footer
 st.markdown(
