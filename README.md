@@ -18,7 +18,6 @@ A Streamlit web app that predicts the **glass transition temperature (Tg)** of p
   - Critical Temperature (Tc)
   - Density
   - Radius of Gyration (Rg)
-  - Molecular Weight
 - 🧬 **3D Molecular Visualization** using RDKit and py3Dmol
 - 💡 Error handling for invalid inputs
 - 🧮 Built-in StandardScaler and feature processing
