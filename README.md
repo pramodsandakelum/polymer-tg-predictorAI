@@ -20,8 +20,6 @@ This Streamlit application predicts the **glass transition temperature (Tg)** of
 polymer-tg-app/
 │
 ├── app.py                           # Streamlit frontend
-├── utils/
-│   └── featurize.py                 # RDKit-based SMILES featurization
 ├── models/
 │   ├── full_stacked_model.pkl      # Trained ML model
 │   └── feature_scaler.pkl          # Feature scaler
@@ -80,20 +78,14 @@ Then open [http://localhost:8501](http://localhost:8501) in your browser.
 
 ---
 
-## 🔬 Example Inputs & Outputs
+## 🔬 Example Inputs
 
 | SMILES             | Predicted Tg (K) |
-|--------------------|------------------|
-| `CCO`              | 42.68            |
-| `C(CO)OCCO`         | 15.14            |
-| `c1ccccc1C(C)C`     | 107.66           |
-| `CC(C)CC(=O)O`      | ~131.10          |
-
----
-
-## 📊 Sample Screenshot
-
-![App Screenshot](https://your-placeholder-screenshot-url.com/screenshot.png)
+|
+| `CCO`
+| `C(CO)OCCO`
+| `c1ccccc1C(C)C`
+| `CC(C)CC(=O)O`
 
 ---
 
@@ -108,7 +100,7 @@ Then open [http://localhost:8501](http://localhost:8501) in your browser.
 ## 🧑‍💻 Author
 
 Developed by **Pramod Sandakelum**  
-🔗 Contact: [your.email@example.com](mailto:your.email@example.com)
+🔗 Contact: [pramodsandakelum@gmail.com](mailto:pramodsandakelum@gmail.com)
 
 ---
 
